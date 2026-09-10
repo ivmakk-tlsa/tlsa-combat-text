@@ -3,8 +3,8 @@
 Tracks the mod's Nexus page details.
 
 - Mod name: Combat Text
-- Mod id: TBD (fill in after the page is created)
-- URL: TBD (https://www.nexusmods.com/thelaststandaftermath/mods/<id>)
+- Mod id: 11
+- URL: https://www.nexusmods.com/thelaststandaftermath/mods/11
 - Domain: thelaststandaftermath
 - Category: User Interface (or Miscellaneous)
 - Short description: see `short-description.txt` (a one-line hook; the only text shown on the mods-list grid).
