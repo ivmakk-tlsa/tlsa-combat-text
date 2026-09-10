@@ -4,6 +4,8 @@ All notable changes to this mod are documented here. The format follows [Keep a 
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-09-10
+
 ### Added
 
 - A health bar above each damaged zombie, hidden while its health is full and cleared on death.
