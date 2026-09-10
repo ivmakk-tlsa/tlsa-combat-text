@@ -1,15 +1,15 @@
 [size=5]Description[/size]
-Combat Text adds the enemy damage feedback the game leaves out. Hit a zombie and a small health bar appears above its head, hidden again once it is back to full health. Every hit and every fire tick spawns a floating number showing the health it actually lost, so you can tell how close a zombie is to dying and how much each attack is worth.
+Combat Text adds health bars and floating damage numbers to zombies. The bars show how much health they have left, and the numbers show how much health each attack takes away.
 
-An armored zombie shows its armor as blue segments under the bar, one per plate, from the first hit. A segment empties as its plate breaks. The number is the real health lost, not the raw damage, so a hit that armor or resistance eats shows nothing.
+Armored zombies also have blue segments below their health bar, one for each armor plate. These appear once the zombie takes health or armor damage. Each segment shrinks as the plate takes damage and empties when it breaks. Hits that cause no health loss do not produce a damage number.
 
 [size=5]Main features[/size]
 [list]
 [*]A health bar above each damaged zombie, hidden while it is at full health and gone when it dies.
-[*]A floating number for each hit and each fire tick, showing the health actually lost.
-[*]Armor shown as blue segments under the bar, emptying as each plate breaks.
-[*]Fire ticks merge into one number, so damage over time stays readable.
-[*]Bars, numbers, number lifetime, and overlay size are all configurable.
+[*]Floating numbers show health lost to attacks and fire damage.
+[*]Blue segments show how much armor remains on each plate.
+[*]Repeated damage of the same type to the same zombie adds up in one number when it occurs close together.
+[*]Settings to toggle bars and numbers, adjust their size, and choose how long numbers stay visible.
 [/list]
 
 [size=5]Requirements[/size]
@@ -25,14 +25,13 @@ An armored zombie shows its armor as blue segments under the bar, one per plate,
 [*]Steam: [code]C:\Program Files (x86)\Steam\steamapps\common\The Last Stand Aftermath\BepInEx\plugins\CombatText.dll[/code]
 [*]Epic: [code]C:\Program Files\Epic Games\The Last Stand Aftermath\BepInEx\plugins\CombatText.dll[/code]
 [/list]
-[*]Start the game. Hit a zombie and a health bar and a damage number appear.
 [/list]
 
 [size=5]Uninstall[/size]
 Delete CombatText.dll from the BepInEx\plugins folder.
 
 [size=5]Configuration[/size]
-To change mod settings, edit [font=Courier New]BepInEx\config\com.ivmakk.tlsa.combattext.cfg[/font]. You can turn the bars or the numbers off, set how long a number stays on screen and how fire ticks merge, and scale the whole overlay. Edit the file, then restart the game to apply the change.
+To change mod settings, edit [font=Courier New]BepInEx\config\com.ivmakk.tlsa.combattext.cfg[/font] (see [url=https://github.com/ivmakk-tlsa/tlsa-combat-text/blob/main/CONFIG.md]CONFIG.md[/url] for every setting).
 
 [size=5]Source and license[/size]
 Open source under GPL-3.0: [url=https://github.com/ivmakk-tlsa/tlsa-combat-text]github.com/ivmakk-tlsa/tlsa-combat-text[/url]
