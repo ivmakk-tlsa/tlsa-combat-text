@@ -1,0 +1,9 @@
+<Project>
+
+  <!-- Intentionally empty. This stops the Directory.Build.props walk so test projects under
+       tests/ do NOT import the repo-root props, which add the game's IL2CPP references
+       (Assembly-CSharp, Il2Cpp*, UnityEngine, DeadReckoned.Tlsa). Those assemblies need the
+       running game and cannot load in a test host. The tests link only CombatTextState.cs, which
+       has no game dependencies. -->
+
+</Project>

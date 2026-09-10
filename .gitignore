@@ -1,0 +1,9 @@
+# Build output
+bin/
+obj/
+
+# Package artifacts
+dist/
+
+# Private wrapper content, never in a public repo
+docs/tickets/

@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Unit tests for the game-free combat text state. This project links the single pure source
+       file from the mod (src/CombatTextState.cs) and references no game assemblies. It targets a
+       normal test host framework, not the plugin's netstandard2.1. The empty
+       tests/Directory.Build.props stops the props walk, so this project does not import the mod or
+       wrapper props that add the game's IL2CPP references (which need the running game and cannot
+       load in a test host). -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>disable</Nullable>
+    <IsPackable>false</IsPackable>
+    <LangVersion>latest</LangVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\src\CombatTextState.cs" />
+  </ItemGroup>
+
+</Project>
