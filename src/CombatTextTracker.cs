@@ -149,7 +149,11 @@ internal static class CombatTextTracker
         }
         catch (Exception e)
         {
-            Plugin.Log.LogWarning($"CombatText track failed: {e.Message}");
+            if (!_trackWarned)
+            {
+                _trackWarned = true;
+                Plugin.Log.LogWarning($"CombatText track failed (logged once): {e}");
+            }
         }
     }
 
@@ -225,6 +229,8 @@ internal static class CombatTextTracker
     private static bool _statusReadWarned;
     private static bool _armorPollWarned;
     private static bool _damageWarned;
+    private static bool _trackWarned;
+    private static bool _armorBrokenWarned;
 
     private static void EnsureModels()
     {
@@ -416,7 +422,11 @@ internal static class CombatTextTracker
         }
         catch (Exception e)
         {
-            Plugin.Log.LogWarning($"CombatText armor-broken check failed: {e.Message}");
+            if (!_armorBrokenWarned)
+            {
+                _armorBrokenWarned = true;
+                Plugin.Log.LogWarning($"CombatText armor-broken check failed (logged once): {e}");
+            }
         }
     }
 
