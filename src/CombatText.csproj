@@ -20,10 +20,10 @@
 
   <!-- The overlay icons, loaded from these embedded resources at runtime. -->
   <ItemGroup>
-    <EmbeddedResource Include="broken_shield_icon.png" />
-    <EmbeddedResource Include="fire_icon.png" />
-    <EmbeddedResource Include="bleed_icon.png" />
-    <EmbeddedResource Include="stun_icon.png" />
+    <EmbeddedResource Include="icons\broken_shield_icon.png" />
+    <EmbeddedResource Include="icons\fire_icon.png" />
+    <EmbeddedResource Include="icons\bleed_icon.png" />
+    <EmbeddedResource Include="icons\stun_icon.png" />
   </ItemGroup>
 
 </Project>
