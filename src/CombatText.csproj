@@ -4,16 +4,26 @@
        This file only names the plugin. -->
   <PropertyGroup>
     <AssemblyName>CombatText</AssemblyName>
-    <Version>1.0.0</Version>
+    <Version>1.1.0</Version>
   </PropertyGroup>
 
   <!-- UnityEngine.IMGUIModule provides GUI, GUIStyle and Event for the overlay;
        UnityEngine.TextRenderingModule provides the FontStyle and TextAnchor the number style sets;
-       UnityEngine.UIModule provides Canvas, read for the game's HUD scale factor. -->
+       UnityEngine.UIModule provides Canvas, read for the game's HUD scale factor;
+       UnityEngine.ImageConversionModule provides ImageConversion.LoadImage for the PNG icon. -->
   <ItemGroup>
     <Reference Include="UnityEngine.IMGUIModule"><HintPath>$(BepInExInterop)\UnityEngine.IMGUIModule.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="UnityEngine.TextRenderingModule"><HintPath>$(BepInExInterop)\UnityEngine.TextRenderingModule.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="UnityEngine.UIModule"><HintPath>$(BepInExInterop)\UnityEngine.UIModule.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="UnityEngine.ImageConversionModule"><HintPath>$(BepInExInterop)\UnityEngine.ImageConversionModule.dll</HintPath><Private>false</Private></Reference>
+  </ItemGroup>
+
+  <!-- The overlay icons, loaded from these embedded resources at runtime. -->
+  <ItemGroup>
+    <EmbeddedResource Include="icons\broken_shield_icon.png" />
+    <EmbeddedResource Include="icons\fire_icon.png" />
+    <EmbeddedResource Include="icons\bleed_icon.png" />
+    <EmbeddedResource Include="icons\stun_icon.png" />
   </ItemGroup>
 
 </Project>

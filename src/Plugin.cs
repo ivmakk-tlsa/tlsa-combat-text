@@ -15,7 +15,7 @@ namespace CombatText;
 // Zombie health bars and floating damage numbers. The ApplyDamage patch below measures the real
 // health loss per hit and feeds CombatTextTracker; CombatTextDrawer reads that back each frame and
 // draws the bars and numbers with IMGUI.
-[BepInPlugin(PluginGuid, "CombatText", "1.0.0")]
+[BepInPlugin(PluginGuid, "CombatText", "1.1.0")]
 public class Plugin : BasePlugin
 {
     public const string PluginGuid = "com.ivmakk.tlsa.combattext";
@@ -28,6 +28,9 @@ public class Plugin : BasePlugin
     internal static ConfigEntry<float> NumberLifetime;
     internal static ConfigEntry<float> BarOffset;
     internal static ConfigEntry<float> Scale;
+    internal static ConfigEntry<float> StatusIconSize;
+    internal static ConfigEntry<float> ArmorIconSize;
+    internal static ConfigEntry<float> StatusShowDelay;
 
     public override void Load()
     {
@@ -43,7 +46,7 @@ public class Plugin : BasePlugin
             "Display", "ShowNumbers", true,
             "When true, each damage event spawns a floating number showing the health actually lost.");
         MergeTickWindow = Config.Bind(
-            "Display", "MergeTickWindow", 0.5f,
+            "Display", "MergeTickWindow", 0.1f,
             "Seconds within which repeated damage of the same type on the same zombie sums into one number instead of spawning another.");
         NumberLifetime = Config.Bind(
             "Display", "NumberLifetime", 1.5f,
@@ -52,8 +55,23 @@ public class Plugin : BasePlugin
             "Display", "Scale", 1.0f,
             "Size multiplier for the bars and numbers, on top of the game's own HUD scale (resolution plus the UI Scale setting).");
         BarOffset = Config.Bind(
-            "Display", "BarOffset", 0.6f,
+            "Display", "BarOffset", 0.8f,
             "World units above the zombie's chest position where the health bar is anchored.");
+        StatusIconSize = Config.Bind(
+            "Display", "StatusIconSize", 16.0f,
+            new BepInEx.Configuration.ConfigDescription(
+                "Base size in pixels (at 1080p) of the status icons (fire, bleed, stun) drawn after the bar. Scaled by the HUD scale and the Scale setting.",
+                new AcceptableValueRange<float>(4f, 64f)));
+        ArmorIconSize = Config.Bind(
+            "Display", "ArmorIconSize", 16.0f,
+            new BepInEx.Configuration.ConfigDescription(
+                "Base size in pixels (at 1080p) of the armor-break icon that flashes when the last plate breaks. Scaled by the HUD scale and the Scale setting.",
+                new AcceptableValueRange<float>(4f, 64f)));
+        StatusShowDelay = Config.Bind(
+            "Display", "StatusShowDelay", 0.1f,
+            new BepInEx.Configuration.ConfigDescription(
+                "Seconds a status effect must last before its icon appears, so a zombie that dies right after the first tick never flashes an icon.",
+                new AcceptableValueRange<float>(0f, 5f)));
 
         var harmony = new Harmony(PluginGuid);
         harmony.PatchAll();
@@ -169,6 +187,7 @@ public static class ArmorPartBreakPatch
             if (zombie != null && !zombie.IsDead)
             {
                 CombatTextTracker.Track(zombie);
+                CombatTextTracker.OnArmorBroken(zombie);
             }
             if (Plugin.Verbose.Value)
             {
@@ -197,7 +216,7 @@ public static class ZombieOnDiedPatch
 public static class ZombieResetStatePatch
 {
     [HarmonyPostfix]
-    public static void Postfix(ZombieActor __instance) => CombatTextTracker.Forget(__instance);
+    public static void Postfix(ZombieActor __instance) => CombatTextTracker.Recycle(__instance);
 }
 
 // Spawn(ZombieSpawnData) is the natural hook, but ZombieSpawnData is a non-blittable struct by
@@ -207,5 +226,5 @@ public static class ZombieResetStatePatch
 public static class ZombieOnSpawningPatch
 {
     [HarmonyPostfix]
-    public static void Postfix(ZombieActor __instance) => CombatTextTracker.Forget(__instance);
+    public static void Postfix(ZombieActor __instance) => CombatTextTracker.Recycle(__instance);
 }

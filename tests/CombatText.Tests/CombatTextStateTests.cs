@@ -349,4 +349,185 @@ public class CombatTextStateTests
 
         Assert.Equal(2, state.Numbers.Count);
     }
+
+    // ---- Armor break markers ----
+
+    [Fact]
+    public void Armor_broken_spawns_one_marker_with_actor_position_and_time()
+    {
+        var state = State();
+
+        state.OnArmorBroken(7, P(4f, 5f, 6f), now: 12.0);
+
+        var marker = Assert.Single(state.Markers);
+        Assert.Equal(7, marker.ActorId);
+        Assert.Equal(4f, marker.Position.X);
+        Assert.Equal(5f, marker.Position.Y);
+        Assert.Equal(6f, marker.Position.Z);
+        Assert.Equal(12.0, marker.SpawnedAt);
+    }
+
+    [Fact]
+    public void A_second_armor_break_for_a_live_marker_does_not_stack()
+    {
+        var state = State();
+        state.OnArmorBroken(7, P(), 0.0);
+
+        state.OnArmorBroken(7, P(), 0.2);
+
+        Assert.Equal(0.0, Assert.Single(state.Markers).SpawnedAt);
+    }
+
+    [Fact]
+    public void A_different_actor_spawns_a_second_marker()
+    {
+        var state = State();
+        state.OnArmorBroken(7, P(), 0.0);
+
+        state.OnArmorBroken(9, P(), 0.0);
+
+        Assert.Equal(2, state.Markers.Count);
+    }
+
+    [Fact]
+    public void Tick_drops_expired_markers_and_keeps_younger_ones()
+    {
+        var state = State();
+        state.OnArmorBroken(7, P(), 0.0);
+        state.OnArmorBroken(9, P(), 0.6);
+
+        state.Tick(1.0);
+
+        Assert.Equal(9, Assert.Single(state.Markers).ActorId);
+    }
+
+    [Fact]
+    public void A_marker_can_spawn_again_after_the_first_expires()
+    {
+        var state = State();
+        state.OnArmorBroken(7, P(), 0.0);
+        state.Tick(1.0);
+
+        state.OnArmorBroken(7, P(), 1.0);
+
+        Assert.Equal(1.0, Assert.Single(state.Markers).SpawnedAt);
+    }
+
+    [Theory]
+    [InlineData(0.0, 0f, 1f, 0f)]
+    [InlineData(0.6, 0.6f, 1f, 24f)]
+    [InlineData(0.8, 0.8f, 0.5f, 32f)]
+    [InlineData(1.0, 1f, 0f, 40f)]
+    public void Marker_progress_alpha_and_drift_follow_the_age(double age, float progress, float alpha, float drift)
+    {
+        var state = State();
+        state.OnArmorBroken(7, P(), 10.0);
+        var marker = Assert.Single(state.Markers);
+
+        double now = 10.0 + age;
+
+        Assert.Equal(progress, marker.Progress(now), 5);
+        Assert.Equal(alpha, marker.Alpha(now), 5);
+        Assert.Equal(drift, marker.Drift(now), 5);
+    }
+
+    // ---- Status icons ----
+
+    private static bool[] Present(params StatusKind[] kinds)
+    {
+        var present = new bool[CombatTextState.StatusKindCount];
+        foreach (var kind in kinds)
+        {
+            present[(int)kind] = true;
+        }
+        return present;
+    }
+
+    private static float[] Fractions(float fire = 0f, float bleed = 0f, float stun = 0f)
+        => new[] { fire, bleed, stun };
+
+    [Theory]
+    [InlineData(10f, 5f, 0f, 0.5f)]
+    [InlineData(10f, 20f, 0f, 1f)]
+    [InlineData(10f, -5f, 0f, 0f)]
+    [InlineData(0f, 0f, 0.3f, 0.3f)]
+    [InlineData(0f, 0f, 0f, 1f)]
+    [InlineData(-1f, 99f, 0f, 1f)]
+    public void StatusFraction_follows_the_rule(float duration, float remaining, float percentage, float expected)
+    {
+        Assert.Equal(expected, CombatTextState.StatusFraction(duration, remaining, percentage), 5);
+    }
+
+    [Theory]
+    [InlineData("Burning", (int)StatusKind.Fire)]
+    [InlineData("BurningSmall", (int)StatusKind.Fire)]
+    [InlineData("BURN", (int)StatusKind.Fire)]
+    [InlineData("Bleeding", (int)StatusKind.Bleed)]
+    [InlineData("Stunned", (int)StatusKind.Stun)]
+    [InlineData("Slowed", -1)]
+    [InlineData("", -1)]
+    [InlineData(null, -1)]
+    public void ClassifyStatusByName_matches_known_effects(string name, int expected)
+    {
+        Assert.Equal(expected, CombatTextState.ClassifyStatusByName(name));
+    }
+
+    [Fact]
+    public void A_status_is_held_back_until_it_lasts_the_show_delay()
+    {
+        var state = State();
+        var into = new System.Collections.Generic.List<ActiveStatus>();
+        var present = Present(StatusKind.Fire);
+        var fraction = Fractions(fire: 1f);
+
+        state.ResolveStatuses(7, present, fraction, now: 0.0, showDelay: 0.1f, into);
+        Assert.Empty(into);
+
+        state.ResolveStatuses(7, present, fraction, now: 0.2, showDelay: 0.1f, into);
+        var shown = Assert.Single(into);
+        Assert.Equal(StatusKind.Fire, shown.Kind);
+        Assert.Equal(1f, shown.Fraction, 5);
+    }
+
+    [Fact]
+    public void An_absent_status_re_arms_the_delay()
+    {
+        var state = State();
+        var into = new System.Collections.Generic.List<ActiveStatus>();
+
+        state.ResolveStatuses(7, Present(StatusKind.Fire), Fractions(fire: 1f), 0.0, 0.1f, into);
+        state.ResolveStatuses(7, Present(), Fractions(), 0.2, 0.1f, into);
+        Assert.Empty(into);
+
+        state.ResolveStatuses(7, Present(StatusKind.Fire), Fractions(fire: 1f), 0.25, 0.1f, into);
+        Assert.Empty(into);
+        state.ResolveStatuses(7, Present(StatusKind.Fire), Fractions(fire: 1f), 0.4, 0.1f, into);
+        Assert.Single(into);
+    }
+
+    [Fact]
+    public void Remove_clears_the_status_delay_timer()
+    {
+        var state = State();
+        var into = new System.Collections.Generic.List<ActiveStatus>();
+
+        state.ResolveStatuses(7, Present(StatusKind.Fire), Fractions(fire: 1f), 0.0, 0.1f, into);
+        state.Remove(7);
+        state.ResolveStatuses(7, Present(StatusKind.Fire), Fractions(fire: 1f), 0.2, 0.1f, into);
+
+        Assert.Empty(into);
+    }
+
+    [Fact]
+    public void Full_health_clears_the_status_delay_timer()
+    {
+        var state = State();
+        var into = new System.Collections.Generic.List<ActiveStatus>();
+
+        state.ResolveStatuses(7, Present(StatusKind.Fire), Fractions(fire: 1f), 0.0, 0.1f, into);
+        state.OnDamage(7, 100f, 100f, 100f, 1, P(), 0.05);
+        state.ResolveStatuses(7, Present(StatusKind.Fire), Fractions(fire: 1f), 0.2, 0.1f, into);
+
+        Assert.Empty(into);
+    }
 }

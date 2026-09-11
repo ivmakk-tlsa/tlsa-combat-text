@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using Game.Actors;
+using Game.Data.Models.StatusEffects;
+using Game.Logic.StatusEffects;
 using UnityEngine;
 
 namespace CombatText;
@@ -92,7 +94,11 @@ internal static class CombatTextTracker
         }
         catch (Exception e)
         {
-            Plugin.Log.LogWarning($"CombatText tracker failed: {e.Message}");
+            if (!_damageWarned)
+            {
+                _damageWarned = true;
+                Plugin.Log.LogWarning($"CombatText tracker failed (logged once): {e}");
+            }
             return false;
         }
     }
@@ -124,7 +130,11 @@ internal static class CombatTextTracker
         }
         catch (Exception e)
         {
-            Plugin.Log.LogWarning($"CombatText track failed: {e.Message}");
+            if (!_trackWarned)
+            {
+                _trackWarned = true;
+                Plugin.Log.LogWarning($"CombatText track failed (logged once): {e}");
+            }
         }
     }
 
@@ -133,6 +143,27 @@ internal static class CombatTextTracker
         State.Remove(actorId);
         Actors.Remove(actorId);
         Armor.Remove(actorId);
+    }
+
+    // Recycle a pooled actor id: forget it and also drop its armor-break markers, so a reused id does
+    // not inherit the previous zombie's marker. Called from the spawn and reset hooks, not from death,
+    // where a marker should finish its flash.
+    internal static void Recycle(ZombieActor zombie)
+    {
+        try
+        {
+            if (zombie == null)
+            {
+                return;
+            }
+            int id = zombie.Id;
+            Forget(id);
+            State.ClearMarkers(id);
+        }
+        catch (Exception e)
+        {
+            Plugin.Log.LogWarning($"CombatText recycle failed: {e.Message}");
+        }
     }
 
     // Called once per drawn frame. Rescans the scene for armor sets on the interval, then starts
@@ -168,8 +199,209 @@ internal static class CombatTextTracker
         }
         catch (Exception e)
         {
-            Plugin.Log.LogWarning($"CombatText armor poll failed: {e.Message}");
+            if (!_armorPollWarned)
+            {
+                _armorPollWarned = true;
+                Plugin.Log.LogWarning($"CombatText armor poll failed (logged once): {e}");
+            }
         }
+    }
+
+    // The status effects the overlay shows, resolved once from the game's static provider. Retried
+    // until all resolve, because the provider may not be ready before a mission loads.
+    private static StatusEffectModel _burning;
+    private static StatusEffectModel _burningSmall;
+    private static StatusEffectModel _bleeding;
+    private static StatusEffectModel _stunned;
+    private static float _statusLogNext;
+
+    // Reused per-frame buffers for one actor's readings, handed to CombatTextState.ResolveStatuses,
+    // which owns the show-delay bookkeeping.
+    private static readonly float[] _fractionBuf = new float[CombatTextState.StatusKindCount];
+    private static readonly bool[] _presentBuf = new bool[CombatTextState.StatusKindCount];
+
+    // One-time warning guards for the frequently called reads, so a persistent failure never spams the
+    // log frame after frame.
+    private static bool _statusReadWarned;
+    private static bool _armorPollWarned;
+    private static bool _damageWarned;
+    private static bool _trackWarned;
+    private static bool _armorBrokenWarned;
+
+    private static void EnsureModels()
+    {
+        if (_burning != null && _burningSmall != null && _bleeding != null && _stunned != null)
+        {
+            return;
+        }
+        try
+        {
+            _burning = StatusEffects.Burning;
+            _burningSmall = StatusEffects.BurningSmall;
+            _bleeding = StatusEffects.Bleeding;
+            _stunned = StatusEffects.Stunned;
+        }
+        catch
+        {
+            // Not ready yet; a later frame retries.
+        }
+    }
+
+    // Fills `into` with the zombie's active shown statuses, each with its remaining-time fraction
+    // (1 at start, 0 at end). Reads the actor's live status effects, classifies each, keeps the max
+    // fraction per kind, and holds each kind back until it lasts StatusShowDelay. Ordered by kind, so
+    // the row layout is stable.
+    internal static void ReadStatuses(ZombieActor zombie, List<ActiveStatus> into)
+    {
+        into.Clear();
+        try
+        {
+            var receiver = zombie.StatusEffectReceiver;
+            if (receiver == null)
+            {
+                return;
+            }
+            var effects = receiver.StatusEffects;
+            if (effects == null)
+            {
+                return;
+            }
+            EnsureModels();
+            bool haveAll = _burning != null && _burningSmall != null && _bleeding != null && _stunned != null;
+            bool log = Plugin.Verbose.Value && Time.time >= _statusLogNext;
+            bool logged = false;
+
+            for (int i = 0; i < _fractionBuf.Length; i++)
+            {
+                _fractionBuf[i] = 0f;
+                _presentBuf[i] = false;
+            }
+
+            var node = effects.First;
+            while (node != null)
+            {
+                var effect = node.Value;
+                if (effect != null && effect.IsActive)
+                {
+                    int kind = ClassifyKind(effect.Model, haveAll);
+                    if (kind >= 0)
+                    {
+                        float duration = effect.Duration;
+
+                        // Read the percentage only when duration is unknown, to save an interop call;
+                        // CombatTextState.StatusFraction encodes the rule over these plain values.
+                        float remaining = duration > 0f ? effect.TimeRemaining : 0f;
+                        float percentage = duration > 0f ? 0f : effect.TimeRemainingPercentage;
+                        float fraction = CombatTextState.StatusFraction(duration, remaining, percentage);
+
+                        if (fraction > _fractionBuf[kind])
+                        {
+                            _fractionBuf[kind] = fraction;
+                        }
+                        _presentBuf[kind] = true;
+                    }
+
+                    if (log)
+                    {
+                        string modelName = effect.Model != null ? effect.Model.name : "<null>";
+                        Plugin.Log.LogDebug($"CombatText status: actor {zombie.Id} {modelName} kind={kind} remaining={effect.TimeRemaining} duration={effect.Duration}");
+                        logged = true;
+                    }
+                }
+                node = node.Next;
+            }
+            if (logged)
+            {
+                _statusLogNext = Time.time + 0.5f;
+            }
+
+            State.ResolveStatuses(zombie.Id, _presentBuf, _fractionBuf, Time.time, Plugin.StatusShowDelay.Value, into);
+        }
+        catch (Exception e)
+        {
+            if (!_statusReadWarned)
+            {
+                _statusReadWarned = true;
+                Plugin.Log.LogWarning($"CombatText status read failed (logged once): {e}");
+            }
+        }
+    }
+
+    // The status kind for an effect model, or -1 if not one the overlay shows. Reference match first;
+    // a name fallback covers the window before the model references resolve.
+    private static int ClassifyKind(StatusEffectModel model, bool haveAll)
+    {
+        if (model == null)
+        {
+            return -1;
+        }
+        if (model == _burning || model == _burningSmall)
+        {
+            return (int)StatusKind.Fire;
+        }
+        if (model == _bleeding)
+        {
+            return (int)StatusKind.Bleed;
+        }
+        if (model == _stunned)
+        {
+            return (int)StatusKind.Stun;
+        }
+        if (!haveAll)
+        {
+            return CombatTextState.ClassifyStatusByName(model.name);
+        }
+        return -1;
+    }
+
+    // A plate just broke. If it was the last one, spawn the armor-break marker once. The set is read
+    // after Break() ran, so no part with health left means no armor remains.
+    internal static void OnArmorBroken(ZombieActor zombie)
+    {
+        try
+        {
+            if (zombie == null || zombie.IsDead)
+            {
+                return;
+            }
+            var set = ResolveArmor(zombie);
+            if (set == null || !AllBroken(set.m_ArmorParts))
+            {
+                return;
+            }
+            Vector3 position = zombie.ChestPosition;
+            State.OnArmorBroken(zombie.Id, new WorldPoint(position.x, position.y, position.z), Time.time);
+            Actors[zombie.Id] = zombie;
+            if (Plugin.Verbose.Value)
+            {
+                Plugin.Log.LogDebug($"CombatText: actor {zombie.Id} lost its last armor plate, marker spawned.");
+            }
+        }
+        catch (Exception e)
+        {
+            if (!_armorBrokenWarned)
+            {
+                _armorBrokenWarned = true;
+                Plugin.Log.LogWarning($"CombatText armor-broken check failed (logged once): {e}");
+            }
+        }
+    }
+
+    private static bool AllBroken(Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray<ActorArmorPart> parts)
+    {
+        if (parts == null || parts.Length == 0)
+        {
+            return false;
+        }
+        for (int i = 0; i < parts.Length; i++)
+        {
+            var part = parts[i];
+            if (part != null && part.HealthCurrent > 0f)
+            {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static bool IsDamaged(Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray<ActorArmorPart> parts)

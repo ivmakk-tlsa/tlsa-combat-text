@@ -2,9 +2,11 @@
 
 A mod for [*The Last Stand: Aftermath*](https://www.nexusmods.com/thelaststandaftermath) that shows enemy damage feedback the game leaves out. Each damaged zombie gets a small health bar above its head, hidden while its health is full. Each hit or fire tick spawns a floating number showing the health actually lost, so you can tell how close a zombie is to death and how much each attack takes.
 
-An armored zombie shows its armor as blue segments under the health bar, one per armor part, from the first hit. A segment empties as its part breaks. The number is the real health delta across the hit, not the raw damage, so a fully resisted hit draws nothing. Fire ticks merge inside a short window so the screen stays readable. Drawing is IMGUI from an injected overlay, gated off while the game is paused, a menu is open, or the mission is not running.
+An armored zombie shows its armor as blue segments under the health bar, one per armor part, from the first hit. A segment empties as its part breaks, and a broken-shield icon flashes once above the bar when the last plate goes, so you know the zombie is now open to health damage. The number is the real health delta across the hit, not the raw damage, so a fully resisted hit draws nothing. Fire ticks merge inside a short window so the screen stays readable. Drawing is IMGUI from an injected overlay, gated off while the game is paused, a menu is open, or the mission is not running.
 
-Everything is configurable in `BepInEx\config\com.ivmakk.tlsa.combattext.cfg`: turn the bars or the numbers off, set the number lifetime and the fire-tick merge window, and scale the whole overlay on top of the game's HUD scale. Edit the file, then restart the game to apply the change.
+While a zombie burns, bleeds, or is stunned, an icon for each effect shows in a row to the right of the bar. Each icon greys from the top as the effect's time runs out, so a half-grey icon means half the time is spent. An icon appears only after its effect lasts a short delay, so a zombie that dies right after the first tick never flashes one.
+
+Everything is configurable in `BepInEx\config\com.ivmakk.tlsa.combattext.cfg`: turn the bars or the numbers off, set the number lifetime and the fire-tick merge window, size the status and armor-break icons, set the icon show delay, and scale the whole overlay on top of the game's HUD scale. Edit the file, then restart the game to apply the change.
 
 ## Install
 
