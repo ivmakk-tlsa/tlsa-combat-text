@@ -180,16 +180,41 @@ public sealed class ArmorBreakMarker
     public float Drift(double now) => Progress(now) * CombatTextState.DriftPixels;
 }
 
+// The status kinds the overlay shows, in the fixed order they are laid out after the bar.
+public enum StatusKind
+{
+    Fire = 0,
+    Bleed = 1,
+    Stun = 2,
+}
+
+// One active status to draw: its kind and its remaining-time fraction (1 at start, 0 at end).
+public readonly struct ActiveStatus
+{
+    public readonly StatusKind Kind;
+    public readonly float Fraction;
+
+    public ActiveStatus(StatusKind kind, float fraction)
+    {
+        Kind = kind;
+        Fraction = fraction;
+    }
+}
+
 public sealed class CombatTextState
 {
     // How far a number rises over its full lifetime, in screen pixels.
     public const float DriftPixels = 40f;
+
+    // The number of StatusKind values.
+    public const int StatusKindCount = 3;
 
     private readonly float _mergeTickWindow;
     private readonly float _numberLifetime;
     private readonly Dictionary<int, TrackedActor> _tracked = new Dictionary<int, TrackedActor>();
     private readonly List<FloatingNumber> _numbers = new List<FloatingNumber>();
     private readonly List<ArmorBreakMarker> _markers = new List<ArmorBreakMarker>();
+    private readonly Dictionary<long, double> _statusSince = new Dictionary<long, double>();
 
     public CombatTextState(float mergeTickWindow, float numberLifetime)
     {
@@ -211,6 +236,7 @@ public sealed class CombatTextState
         if (healthMax > 0f && healthAfter >= healthMax)
         {
             _tracked.Remove(actorId);
+            ClearStatusTimes(actorId);
             return;
         }
 
@@ -263,7 +289,86 @@ public sealed class CombatTextState
     public void Remove(int actorId)
     {
         _tracked.Remove(actorId);
+        ClearStatusTimes(actorId);
     }
+
+    // The remaining-time fraction (1 at start, 0 at end) from a status effect's time fields. Prefers
+    // remaining / duration; falls back to the percentage; if neither is known, the effect is active
+    // but gives no time, so it reads as full.
+    public static float StatusFraction(float duration, float remaining, float percentage)
+    {
+        if (duration > 0f)
+        {
+            return Clamp01(remaining / duration);
+        }
+        if (percentage > 0f)
+        {
+            return Clamp01(percentage);
+        }
+        return 1f;
+    }
+
+    // The status kind (as an int) for an effect model name, or -1 for none. The name fallback used
+    // before the game's model references resolve.
+    public static int ClassifyStatusByName(string name)
+    {
+        if (string.IsNullOrEmpty(name))
+        {
+            return -1;
+        }
+        if (name.IndexOf("burn", StringComparison.OrdinalIgnoreCase) >= 0)
+        {
+            return (int)StatusKind.Fire;
+        }
+        if (name.IndexOf("bleed", StringComparison.OrdinalIgnoreCase) >= 0)
+        {
+            return (int)StatusKind.Bleed;
+        }
+        if (name.IndexOf("stun", StringComparison.OrdinalIgnoreCase) >= 0)
+        {
+            return (int)StatusKind.Stun;
+        }
+        return -1;
+    }
+
+    // Given this frame's per-kind presence and fraction for an actor, fills `into` with the kinds to
+    // draw. A kind shows only after it stays present for showDelay, so a status that ends at once never
+    // flashes. A kind that goes absent drops its timer, so it re-arms the delay next time.
+    public void ResolveStatuses(int actorId, bool[] present, float[] fraction, double now, float showDelay, List<ActiveStatus> into)
+    {
+        into.Clear();
+        for (int kind = 0; kind < present.Length; kind++)
+        {
+            long key = StatusKey(actorId, kind);
+            if (!present[kind])
+            {
+                _statusSince.Remove(key);
+                continue;
+            }
+            if (!_statusSince.TryGetValue(key, out double since))
+            {
+                since = now;
+                _statusSince[key] = since;
+            }
+            if (now - since < showDelay)
+            {
+                continue;
+            }
+            into.Add(new ActiveStatus((StatusKind)kind, Clamp01(fraction[kind])));
+        }
+    }
+
+    private void ClearStatusTimes(int actorId)
+    {
+        for (int kind = 0; kind < StatusKindCount; kind++)
+        {
+            _statusSince.Remove(StatusKey(actorId, kind));
+        }
+    }
+
+    private static long StatusKey(int actorId, int kind) => ((long)actorId << 8) | (uint)kind;
+
+    private static float Clamp01(float value) => value < 0f ? 0f : (value > 1f ? 1f : value);
 
     // The last armor plate of an actor broke. Spawn one marker, unless one for this actor is still
     // alive, so a re-scan or a repeated break event does not stack two.

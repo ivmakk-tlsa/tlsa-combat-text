@@ -279,7 +279,7 @@ public class CombatTextDrawer : MonoBehaviour
                 _statusIcon[kind] = LoadEmbeddedIcon(StatusIconFile[kind]);
                 if (_statusIcon[kind] != null)
                 {
-                    _statusGray[kind] = BuildGrayscale(_statusIcon[kind]);
+                    _statusGray[kind] = BuildGrayscale(_statusIcon[kind], StatusIconFile[kind]);
                 }
             }
         }
@@ -304,9 +304,10 @@ public class CombatTextDrawer : MonoBehaviour
         }
     }
 
-    // A grey copy of a colour icon: each pixel's RGB becomes its luminance, alpha kept. Used behind
-    // the flame so the spent part reads as grey. Falls back to the source on any failure.
-    private static Texture2D BuildGrayscale(Texture2D src)
+    // A grey copy of a colour icon: each pixel's RGB becomes its luminance, alpha kept. Used behind a
+    // status icon so the spent part reads as grey. Falls back to the source on any failure; `label`
+    // names the icon in that warning.
+    private static Texture2D BuildGrayscale(Texture2D src, string label)
     {
         try
         {
@@ -330,7 +331,7 @@ public class CombatTextDrawer : MonoBehaviour
         }
         catch (Exception e)
         {
-            Plugin.Log.LogWarning($"CombatText: flame grayscale build failed: {e.Message}");
+            Plugin.Log.LogWarning($"CombatText: {label} grayscale build failed: {e.Message}");
             return src;
         }
     }

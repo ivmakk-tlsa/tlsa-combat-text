@@ -22,25 +22,6 @@ internal readonly struct ArmorPartHealth
     }
 }
 
-internal enum StatusKind
-{
-    Fire = 0,
-    Bleed = 1,
-    Stun = 2,
-}
-
-internal readonly struct ActiveStatus
-{
-    public readonly StatusKind Kind;
-    public readonly float Fraction;
-
-    public ActiveStatus(StatusKind kind, float fraction)
-    {
-        Kind = kind;
-        Fraction = fraction;
-    }
-}
-
 internal static class CombatTextTracker
 {
     private static CombatTextState _state;
@@ -162,10 +143,6 @@ internal static class CombatTextTracker
         State.Remove(actorId);
         Actors.Remove(actorId);
         Armor.Remove(actorId);
-        for (int kind = 0; kind < StatusKinds; kind++)
-        {
-            StatusSince.Remove(((long)actorId << 8) | (uint)kind);
-        }
     }
 
     // Called once per drawn frame. Rescans the scene for armor sets on the interval, then starts
@@ -211,18 +188,16 @@ internal static class CombatTextTracker
 
     // The status effects the overlay shows, resolved once from the game's static provider. Retried
     // until all resolve, because the provider may not be ready before a mission loads.
-    private const int StatusKinds = 3;
     private static StatusEffectModel _burning;
     private static StatusEffectModel _burningSmall;
     private static StatusEffectModel _bleeding;
     private static StatusEffectModel _stunned;
     private static float _statusLogNext;
 
-    // A status icon appears only after its effect lasts Plugin.StatusShowDelay, so a zombie that dies
-    // right after the first tick never flashes an icon. Tracked by wall clock, keyed by actor and kind.
-    private static readonly Dictionary<long, float> StatusSince = new Dictionary<long, float>();
-    private static readonly float[] _fractionBuf = new float[StatusKinds];
-    private static readonly bool[] _presentBuf = new bool[StatusKinds];
+    // Reused per-frame buffers for one actor's readings, handed to CombatTextState.ResolveStatuses,
+    // which owns the show-delay bookkeeping.
+    private static readonly float[] _fractionBuf = new float[CombatTextState.StatusKindCount];
+    private static readonly bool[] _presentBuf = new bool[CombatTextState.StatusKindCount];
 
     // One-time warning guards for the frequently called reads, so a persistent failure never spams the
     // log frame after frame.
@@ -275,7 +250,7 @@ internal static class CombatTextTracker
             bool log = Plugin.Verbose.Value && Time.time >= _statusLogNext;
             bool logged = false;
 
-            for (int i = 0; i < StatusKinds; i++)
+            for (int i = 0; i < _fractionBuf.Length; i++)
             {
                 _fractionBuf[i] = 0f;
                 _presentBuf[i] = false;
@@ -292,19 +267,11 @@ internal static class CombatTextTracker
                     {
                         float duration = effect.Duration;
 
-                        // Prefer remaining / duration; fall back to the percentage; if neither is
-                        // known, the effect is active but gives no time, so show a full icon. Read the
-                        // percentage only when duration is unknown, to save an interop call.
-                        float fraction;
-                        if (duration > 0f)
-                        {
-                            fraction = effect.TimeRemaining / duration;
-                        }
-                        else
-                        {
-                            float percentage = effect.TimeRemainingPercentage;
-                            fraction = percentage > 0f ? percentage : 1f;
-                        }
+                        // Read the percentage only when duration is unknown, to save an interop call;
+                        // CombatTextState.StatusFraction encodes the rule over these plain values.
+                        float remaining = duration > 0f ? effect.TimeRemaining : 0f;
+                        float percentage = duration > 0f ? 0f : effect.TimeRemainingPercentage;
+                        float fraction = CombatTextState.StatusFraction(duration, remaining, percentage);
 
                         if (fraction > _fractionBuf[kind])
                         {
@@ -327,26 +294,7 @@ internal static class CombatTextTracker
                 _statusLogNext = Time.time + 0.5f;
             }
 
-            int id = zombie.Id;
-            for (int kind = 0; kind < StatusKinds; kind++)
-            {
-                long key = ((long)id << 8) | (uint)kind;
-                if (!_presentBuf[kind])
-                {
-                    StatusSince.Remove(key);
-                    continue;
-                }
-                if (!StatusSince.TryGetValue(key, out float since))
-                {
-                    since = Time.time;
-                    StatusSince[key] = since;
-                }
-                if (Time.time - since < Plugin.StatusShowDelay.Value)
-                {
-                    continue;
-                }
-                into.Add(new ActiveStatus((StatusKind)kind, Mathf.Clamp01(_fractionBuf[kind])));
-            }
+            State.ResolveStatuses(zombie.Id, _presentBuf, _fractionBuf, Time.time, Plugin.StatusShowDelay.Value, into);
         }
         catch (Exception e)
         {
@@ -380,19 +328,7 @@ internal static class CombatTextTracker
         }
         if (!haveAll)
         {
-            string n = model.name;
-            if (n.IndexOf("burn", StringComparison.OrdinalIgnoreCase) >= 0)
-            {
-                return (int)StatusKind.Fire;
-            }
-            if (n.IndexOf("bleed", StringComparison.OrdinalIgnoreCase) >= 0)
-            {
-                return (int)StatusKind.Bleed;
-            }
-            if (n.IndexOf("stun", StringComparison.OrdinalIgnoreCase) >= 0)
-            {
-                return (int)StatusKind.Stun;
-            }
+            return CombatTextState.ClassifyStatusByName(model.name);
         }
         return -1;
     }
