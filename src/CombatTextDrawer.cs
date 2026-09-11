@@ -403,7 +403,9 @@ public class CombatTextDrawer : MonoBehaviour
                 continue;
             }
             float x = screen.x - size * 0.5f;
-            float y = Screen.height - screen.y - marker.Drift(now) * scale;
+            // The world anchor is the bar's top edge, so lift the icon by its own size and a gap to sit
+            // above the bar rather than on it, then rise with the drift.
+            float y = Screen.height - screen.y - size - 4f * scale - marker.Drift(now) * scale;
             float alpha = marker.Alpha(now);
             GUI.color = new Color(1f, 1f, 1f, alpha);
             GUI.DrawTexture(new Rect(x, y, size, size), _shieldIcon);

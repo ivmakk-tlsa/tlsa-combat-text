@@ -145,6 +145,27 @@ internal static class CombatTextTracker
         Armor.Remove(actorId);
     }
 
+    // Recycle a pooled actor id: forget it and also drop its armor-break markers, so a reused id does
+    // not inherit the previous zombie's marker. Called from the spawn and reset hooks, not from death,
+    // where a marker should finish its flash.
+    internal static void Recycle(ZombieActor zombie)
+    {
+        try
+        {
+            if (zombie == null)
+            {
+                return;
+            }
+            int id = zombie.Id;
+            Forget(id);
+            State.ClearMarkers(id);
+        }
+        catch (Exception e)
+        {
+            Plugin.Log.LogWarning($"CombatText recycle failed: {e.Message}");
+        }
+    }
+
     // Called once per drawn frame. Rescans the scene for armor sets on the interval, then starts
     // tracking any live, untracked zombie whose armor shows damage.
     internal static void PollArmor(float now)

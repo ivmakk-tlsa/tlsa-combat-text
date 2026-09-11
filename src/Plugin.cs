@@ -216,7 +216,7 @@ public static class ZombieOnDiedPatch
 public static class ZombieResetStatePatch
 {
     [HarmonyPostfix]
-    public static void Postfix(ZombieActor __instance) => CombatTextTracker.Forget(__instance);
+    public static void Postfix(ZombieActor __instance) => CombatTextTracker.Recycle(__instance);
 }
 
 // Spawn(ZombieSpawnData) is the natural hook, but ZombieSpawnData is a non-blittable struct by
@@ -226,5 +226,5 @@ public static class ZombieResetStatePatch
 public static class ZombieOnSpawningPatch
 {
     [HarmonyPostfix]
-    public static void Postfix(ZombieActor __instance) => CombatTextTracker.Forget(__instance);
+    public static void Postfix(ZombieActor __instance) => CombatTextTracker.Recycle(__instance);
 }

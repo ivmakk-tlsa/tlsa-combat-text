@@ -384,6 +384,14 @@ public sealed class CombatTextState
         _markers.Add(new ArmorBreakMarker(actorId, position, now, _numberLifetime));
     }
 
+    // Drop an actor's armor-break markers. Called when a pooled actor id is recycled (spawn or reset),
+    // so a reused id does not inherit the previous zombie's marker and suppress its own. Not called on
+    // death, so a marker there finishes its flash like the last damage number.
+    public void ClearMarkers(int actorId)
+    {
+        _markers.RemoveAll(m => m.ActorId == actorId);
+    }
+
     // Drop the numbers and markers that have finished their life. The tracked set is untouched: an
     // actor leaves it only through OnDamage at full health or through Remove.
     public void Tick(double now)
