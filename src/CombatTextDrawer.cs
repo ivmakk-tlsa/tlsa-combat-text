@@ -32,14 +32,17 @@ public class CombatTextDrawer : MonoBehaviour
     private static readonly Color BarBackground = new Color(0f, 0f, 0f, 0.7f);
     private static readonly Color ArmorBlue = new Color(0.3f, 0.6f, 1f);
 
+    // Icons load on first use. A load that fails (resource missing, decode error) is not retried, so
+    // the warning fires once. A loaded icon that later reads as null was destroyed by Unity (see
+    // LoadEmbeddedIcon on hideFlags), and is loaded again rather than left dead.
     private static Texture2D _shieldIcon;
-    private static bool _shieldIconTried;
+    private static bool _shieldIconFailed;
 
-    // Status icons and their grey copies, indexed by StatusKind. Loaded on first use.
+    // Status icons and their grey copies, indexed by StatusKind.
     private static readonly string[] StatusIconFile = { "fire_icon.png", "bleed_icon.png", "stun_icon.png" };
     private static readonly Texture2D[] _statusIcon = new Texture2D[3];
     private static readonly Texture2D[] _statusGray = new Texture2D[3];
-    private static readonly bool[] _statusTried = new bool[3];
+    private static readonly bool[] _statusFailed = new bool[3];
 
     // Reused across frames so the per-frame draw allocates nothing.
     private static readonly List<int> Stale = new List<int>();
@@ -271,16 +274,16 @@ public class CombatTextDrawer : MonoBehaviour
     // resource is missing or the decode fails, and the caller then skips that icon.
     private static Texture2D GetStatusIcon(int kind, out Texture2D gray)
     {
-        if (_statusIcon[kind] == null)
+        if (_statusIcon[kind] == null && !_statusFailed[kind])
         {
-            if (!_statusTried[kind])
+            _statusIcon[kind] = LoadEmbeddedIcon(StatusIconFile[kind]);
+            if (_statusIcon[kind] != null)
             {
-                _statusTried[kind] = true;
-                _statusIcon[kind] = LoadEmbeddedIcon(StatusIconFile[kind]);
-                if (_statusIcon[kind] != null)
-                {
-                    _statusGray[kind] = BuildGrayscale(_statusIcon[kind], StatusIconFile[kind]);
-                }
+                _statusGray[kind] = BuildGrayscale(_statusIcon[kind], StatusIconFile[kind]);
+            }
+            else
+            {
+                _statusFailed[kind] = true;
             }
         }
         gray = _statusGray[kind];
@@ -324,6 +327,7 @@ public class CombatTextDrawer : MonoBehaviour
             var tex = new Texture2D(src.width, src.height, TextureFormat.RGBA32, false)
             {
                 wrapMode = TextureWrapMode.Clamp,
+                hideFlags = HideFlags.HideAndDontSave,
             };
             tex.SetPixels32(pixels);
             tex.Apply();
@@ -381,14 +385,14 @@ public class CombatTextDrawer : MonoBehaviour
         }
         if (_shieldIcon == null)
         {
-            if (_shieldIconTried)
+            if (_shieldIconFailed)
             {
                 return;
             }
-            _shieldIconTried = true;
             _shieldIcon = LoadEmbeddedIcon("broken_shield_icon.png");
             if (_shieldIcon == null)
             {
+                _shieldIconFailed = true;
                 return;
             }
         }
@@ -413,9 +417,13 @@ public class CombatTextDrawer : MonoBehaviour
         GUI.color = Color.white;
     }
 
-    // An overlay icon, loaded once from an embedded PNG named by its resource suffix. The icons carry
+    // An overlay icon, loaded from an embedded PNG named by its resource suffix. The icons carry
     // their own colours, so the drawer draws them as-is and only fades or tints with alpha. Returns
     // null if the resource is missing or the decode fails, and the caller then skips that icon.
+    //
+    // The texture is marked HideAndDontSave. Without it, the game's frequent Resources.UnloadUnusedAssets
+    // sweeps destroy it: Unity's liveness walk starts from IL2CPP static fields and cannot see the
+    // reference held on the .NET side of the interop, so a script-made texture counts as unused.
     private static Texture2D LoadEmbeddedIcon(string suffix)
     {
         try
@@ -459,6 +467,11 @@ public class CombatTextDrawer : MonoBehaviour
                 return null;
             }
             tex.wrapMode = TextureWrapMode.Clamp;
+            tex.hideFlags = HideFlags.HideAndDontSave;
+            if (Plugin.Verbose.Value)
+            {
+                Plugin.Log.LogDebug($"CombatText: {suffix} loaded ({tex.width}x{tex.height}).");
+            }
             return tex;
         }
         catch (Exception e)

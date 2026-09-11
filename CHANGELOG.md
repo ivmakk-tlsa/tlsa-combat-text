@@ -4,6 +4,12 @@ All notable changes to this mod are documented here. The format follows [Keep a 
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-09-11
+
+### Fixed
+
+- The status and broken-shield icons stopped drawing after the game's next unused-asset sweep, which destroyed the icon textures. The textures are now marked to survive the sweep, and a destroyed icon reloads instead of staying blank.
+
 ## [1.1.0] - 2026-09-11
 
 ### Added

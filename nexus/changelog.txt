@@ -1,3 +1,6 @@
+v1.1.1 - 2026-09-11
+Fixed: The fire, bleed, stun, and broken-shield icons no longer disappear for the rest of the session after the game unloads assets, such as on a map change.
+
 v1.1.0 - 2026-09-11
 Added: A broken-shield icon flashes above the health bar when a zombie's last armor plate breaks.
 Added: Fire, bleed, and stun icons appear to the right of the health bar. Each icon turns gray from top to bottom as the effect wears off.
