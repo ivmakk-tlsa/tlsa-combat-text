@@ -1,1 +1,1 @@
-Health bars and floating damage numbers on the zombies you hit.
+Health bars, armor indicators, floating damage numbers, and status icons for zombies.

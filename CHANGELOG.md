@@ -8,14 +8,14 @@ All notable changes to this mod are documented here. The format follows [Keep a 
 
 ### Added
 
-- A broken-shield icon that flashes above the bar when a zombie's last armor plate breaks, so you can tell it is open to health damage.
-- Fire, bleed, and stun icons in a row after the health bar while a zombie is affected, each filling down from the top as the effect's time runs out.
-- Settings for the status icon size, the armor-break icon size, and how long an effect must last before its icon shows.
+- A broken-shield icon that flashes above the health bar when a zombie's last armor plate breaks.
+- Fire, bleed, and stun icons to the right of the health bar. Each icon turns gray from top to bottom as the effect wears off.
+- Settings to resize the status and broken-shield icons, and adjust the delay before status icons appear.
 
 ### Changed
 
-- The health bar sits a little higher above the zombie by default, to clear the head.
-- Damage numbers merge over a shorter window by default, so quick separate hits show their own numbers.
+- The default health bar position is higher above the zombie's head (bar offset increased from 0.6 to 0.8).
+- The default damage-number merge window is shorter, reduced from 0.5 to 0.1 seconds, so rapid hits are less likely to combine into one number.
 
 ## [1.0.0] - 2026-09-10
 
