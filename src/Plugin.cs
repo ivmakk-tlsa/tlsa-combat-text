@@ -15,7 +15,7 @@ namespace CombatText;
 // Zombie health bars and floating damage numbers. The ApplyDamage patch below measures the real
 // health loss per hit and feeds CombatTextTracker; CombatTextDrawer reads that back each frame and
 // draws the bars and numbers with IMGUI.
-[BepInPlugin(PluginGuid, "CombatText", "1.1.0")]
+[BepInPlugin(PluginGuid, "CombatText", "1.1.1")]
 public class Plugin : BasePlugin
 {
     public const string PluginGuid = "com.ivmakk.tlsa.combattext";

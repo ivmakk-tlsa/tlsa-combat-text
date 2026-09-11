@@ -4,7 +4,7 @@
        This file only names the plugin. -->
   <PropertyGroup>
     <AssemblyName>CombatText</AssemblyName>
-    <Version>1.1.0</Version>
+    <Version>1.1.1</Version>
   </PropertyGroup>
 
   <!-- UnityEngine.IMGUIModule provides GUI, GUIStyle and Event for the overlay;
