@@ -134,6 +134,52 @@ public sealed class FloatingNumber
     }
 }
 
+// A one-shot "armor destroyed" marker. It spawns when the last armor plate of a zombie breaks,
+// rises and fades on the same clock as a number, and the drawer renders it as an icon. It carries
+// no amount or type, and the state never merges markers: one per break.
+public sealed class ArmorBreakMarker
+{
+    private readonly float _lifetime;
+
+    public int ActorId { get; }
+    public WorldPoint Position { get; }
+    public double SpawnedAt { get; }
+
+    internal ArmorBreakMarker(int actorId, WorldPoint position, double spawnedAt, float lifetime)
+    {
+        ActorId = actorId;
+        Position = position;
+        SpawnedAt = spawnedAt;
+        _lifetime = lifetime;
+    }
+
+    public float Progress(double now)
+    {
+        if (_lifetime <= 0f)
+        {
+            return 1f;
+        }
+        double progress = (now - SpawnedAt) / _lifetime;
+        if (progress <= 0.0)
+        {
+            return 0f;
+        }
+        return progress >= 1.0 ? 1f : (float)progress;
+    }
+
+    public float Alpha(double now)
+    {
+        float progress = Progress(now);
+        if (progress <= FloatingNumber.FadeStart)
+        {
+            return 1f;
+        }
+        return 1f - (progress - FloatingNumber.FadeStart) / (1f - FloatingNumber.FadeStart);
+    }
+
+    public float Drift(double now) => Progress(now) * CombatTextState.DriftPixels;
+}
+
 public sealed class CombatTextState
 {
     // How far a number rises over its full lifetime, in screen pixels.
@@ -143,6 +189,7 @@ public sealed class CombatTextState
     private readonly float _numberLifetime;
     private readonly Dictionary<int, TrackedActor> _tracked = new Dictionary<int, TrackedActor>();
     private readonly List<FloatingNumber> _numbers = new List<FloatingNumber>();
+    private readonly List<ArmorBreakMarker> _markers = new List<ArmorBreakMarker>();
 
     public CombatTextState(float mergeTickWindow, float numberLifetime)
     {
@@ -153,6 +200,8 @@ public sealed class CombatTextState
     public IReadOnlyCollection<TrackedActor> Tracked => _tracked.Values;
 
     public IReadOnlyList<FloatingNumber> Numbers => _numbers;
+
+    public IReadOnlyList<ArmorBreakMarker> Markers => _markers;
 
     // One damage event, already resolved to a health loss by the adapter. A non-positive loss (a
     // fully resisted hit, or a heal) draws nothing. An actor back at full health leaves the tracked
@@ -216,11 +265,26 @@ public sealed class CombatTextState
         _tracked.Remove(actorId);
     }
 
-    // Drop the numbers that have finished their life. The tracked set is untouched: an actor leaves
-    // it only through OnDamage at full health or through Remove.
+    // The last armor plate of an actor broke. Spawn one marker, unless one for this actor is still
+    // alive, so a re-scan or a repeated break event does not stack two.
+    public void OnArmorBroken(int actorId, WorldPoint position, double now)
+    {
+        for (int i = 0; i < _markers.Count; i++)
+        {
+            if (_markers[i].ActorId == actorId)
+            {
+                return;
+            }
+        }
+        _markers.Add(new ArmorBreakMarker(actorId, position, now, _numberLifetime));
+    }
+
+    // Drop the numbers and markers that have finished their life. The tracked set is untouched: an
+    // actor leaves it only through OnDamage at full health or through Remove.
     public void Tick(double now)
     {
         _numbers.RemoveAll(n => now - n.SpawnedAt >= _numberLifetime);
+        _markers.RemoveAll(m => now - m.SpawnedAt >= _numberLifetime);
     }
 
     // The newest number for the same actor and damage type that is still inside the merge window,

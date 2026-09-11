@@ -4,6 +4,14 @@ All notable changes to this mod are documented here. The format follows [Keep a 
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-09-11
+
+### Added
+
+- A broken-shield icon that flashes above the bar when a zombie's last armor plate breaks, so you can tell it is open to health damage.
+- Fire, bleed, and stun icons in a row after the health bar while a zombie is affected, each filling down from the top as the effect's time runs out.
+- Settings for the status icon size, the armor-break icon size, and how long an effect must last before its icon shows.
+
 ## [1.0.0] - 2026-09-10
 
 ### Added

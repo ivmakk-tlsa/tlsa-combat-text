@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Reflection;
 using Game.Actors;
 using Game.Data.Combat;
 using Game.Engine;
@@ -30,9 +32,19 @@ public class CombatTextDrawer : MonoBehaviour
     private static readonly Color BarBackground = new Color(0f, 0f, 0f, 0.7f);
     private static readonly Color ArmorBlue = new Color(0.3f, 0.6f, 1f);
 
+    private static Texture2D _shieldIcon;
+    private static bool _shieldIconTried;
+
+    // Status icons and their grey copies, indexed by StatusKind. Loaded on first use.
+    private static readonly string[] StatusIconFile = { "fire_icon.png", "bleed_icon.png", "stun_icon.png" };
+    private static readonly Texture2D[] _statusIcon = new Texture2D[3];
+    private static readonly Texture2D[] _statusGray = new Texture2D[3];
+    private static readonly bool[] _statusTried = new bool[3];
+
     // Reused across frames so the per-frame draw allocates nothing.
     private static readonly List<int> Stale = new List<int>();
     private static readonly List<ArmorPartHealth> ArmorParts = new List<ArmorPartHealth>();
+    private static readonly List<ActiveStatus> Statuses = new List<ActiveStatus>();
 
     private static GUIStyle _numberStyle;
     private static GUIStyle _criticalStyle;
@@ -122,6 +134,7 @@ public class CombatTextDrawer : MonoBehaviour
         {
             CombatTextTracker.PollArmor(now);
             DrawBars(cam, state, scale);
+            DrawMarkers(cam, state, now, scale);
         }
         if (Plugin.ShowNumbers.Value)
         {
@@ -179,6 +192,7 @@ public class CombatTextDrawer : MonoBehaviour
             GUI.DrawTexture(new Rect(x, y, barWidth * fraction, barHeight), Texture2D.whiteTexture);
 
             DrawArmor(actor, x, y + barHeight + BaseArmorGap * scale, barWidth, scale);
+            DrawStatuses(actor, x, y, barWidth, barHeight, scale);
         }
         GUI.color = Color.white;
 
@@ -224,6 +238,103 @@ public class CombatTextDrawer : MonoBehaviour
         }
     }
 
+    // The active status icons, drawn in a row to the right of the health bar. Each icon shows its
+    // remaining-time fraction as a grey fill: a grey copy sits behind, and the colour icon fills the
+    // bottom by the fraction on top of it. So a half-grey icon means half the effect's time is spent.
+    private static void DrawStatuses(ZombieActor actor, float x, float y, float barWidth, float barHeight, float scale)
+    {
+        CombatTextTracker.ReadStatuses(actor, Statuses);
+        if (Statuses.Count == 0)
+        {
+            return;
+        }
+        float size = Plugin.StatusIconSize.Value * scale;
+        float gap = 4f * scale;
+        float spacing = 3f * scale;
+        float fx = x + barWidth + gap;
+        float fy = y + barHeight * 0.5f - size * 0.5f;
+
+        for (int i = 0; i < Statuses.Count; i++)
+        {
+            var icon = GetStatusIcon((int)Statuses[i].Kind, out var gray);
+            if (icon == null)
+            {
+                continue;
+            }
+            DrawStatusIcon(icon, gray, fx, fy, size, Statuses[i].Fraction);
+            fx += size + spacing;
+        }
+        GUI.color = Color.white;
+    }
+
+    // The colour icon and its grey copy for a status kind, loaded on first use. Returns null if the
+    // resource is missing or the decode fails, and the caller then skips that icon.
+    private static Texture2D GetStatusIcon(int kind, out Texture2D gray)
+    {
+        if (_statusIcon[kind] == null)
+        {
+            if (!_statusTried[kind])
+            {
+                _statusTried[kind] = true;
+                _statusIcon[kind] = LoadEmbeddedIcon(StatusIconFile[kind]);
+                if (_statusIcon[kind] != null)
+                {
+                    _statusGray[kind] = BuildGrayscale(_statusIcon[kind]);
+                }
+            }
+        }
+        gray = _statusGray[kind];
+        return _statusIcon[kind];
+    }
+
+    private static void DrawStatusIcon(Texture2D icon, Texture2D gray, float fx, float fy, float size, float fraction)
+    {
+        GUI.color = Color.white;
+        GUI.DrawTexture(new Rect(fx, fy, size, size), gray != null ? gray : icon);
+
+        float coloured = Mathf.Clamp01(fraction) * size;
+        if (coloured > 0f)
+        {
+            // GUI.DrawTextureWithTexCoords does not render in this IL2CPP GUI, so clip to the bottom
+            // slice and draw the full icon shifted up so only that slice shows.
+            var clip = new Rect(fx, fy + (size - coloured), size, coloured);
+            GUI.BeginGroup(clip);
+            GUI.DrawTexture(new Rect(0f, -(size - coloured), size, size), icon);
+            GUI.EndGroup();
+        }
+    }
+
+    // A grey copy of a colour icon: each pixel's RGB becomes its luminance, alpha kept. Used behind
+    // the flame so the spent part reads as grey. Falls back to the source on any failure.
+    private static Texture2D BuildGrayscale(Texture2D src)
+    {
+        try
+        {
+            var pixels = src.GetPixels32();
+            for (int i = 0; i < pixels.Length; i++)
+            {
+                var p = pixels[i];
+                byte l = (byte)Mathf.Clamp(Mathf.RoundToInt(0.299f * p.r + 0.587f * p.g + 0.114f * p.b), 0, 255);
+                p.r = l;
+                p.g = l;
+                p.b = l;
+                pixels[i] = p;
+            }
+            var tex = new Texture2D(src.width, src.height, TextureFormat.RGBA32, false)
+            {
+                wrapMode = TextureWrapMode.Clamp,
+            };
+            tex.SetPixels32(pixels);
+            tex.Apply();
+            return tex;
+        }
+        catch (Exception e)
+        {
+            Plugin.Log.LogWarning($"CombatText: flame grayscale build failed: {e.Message}");
+            return src;
+        }
+    }
+
     private static void DrawNumbers(Camera cam, CombatTextState state, float now, float scale)
     {
         var numbers = state.Numbers;
@@ -256,6 +367,102 @@ public class CombatTextDrawer : MonoBehaviour
             GUI.Label(rect, text, style);
         }
         GUI.color = Color.white;
+    }
+
+    // The one-shot armor-break icon. It sits at the bar (chest plus BarOffset), above the numbers and
+    // next to the now-empty armor segments, and rises and fades on the marker's own clock.
+    private static void DrawMarkers(Camera cam, CombatTextState state, float now, float scale)
+    {
+        var markers = state.Markers;
+        if (markers.Count == 0)
+        {
+            return;
+        }
+        if (_shieldIcon == null)
+        {
+            if (_shieldIconTried)
+            {
+                return;
+            }
+            _shieldIconTried = true;
+            _shieldIcon = LoadEmbeddedIcon("broken_shield_icon.png");
+            if (_shieldIcon == null)
+            {
+                return;
+            }
+        }
+        float size = Plugin.ArmorIconSize.Value * scale;
+        for (int i = 0; i < markers.Count; i++)
+        {
+            var marker = markers[i];
+            Vector3 world = new Vector3(marker.Position.X, marker.Position.Y, marker.Position.Z) + Vector3.up * Plugin.BarOffset.Value;
+            Vector3 screen = cam.WorldToScreenPoint(world);
+            if (screen.z <= 0f)
+            {
+                continue;
+            }
+            float x = screen.x - size * 0.5f;
+            float y = Screen.height - screen.y - marker.Drift(now) * scale;
+            float alpha = marker.Alpha(now);
+            GUI.color = new Color(1f, 1f, 1f, alpha);
+            GUI.DrawTexture(new Rect(x, y, size, size), _shieldIcon);
+        }
+        GUI.color = Color.white;
+    }
+
+    // An overlay icon, loaded once from an embedded PNG named by its resource suffix. The icons carry
+    // their own colours, so the drawer draws them as-is and only fades or tints with alpha. Returns
+    // null if the resource is missing or the decode fails, and the caller then skips that icon.
+    private static Texture2D LoadEmbeddedIcon(string suffix)
+    {
+        try
+        {
+            var asm = Assembly.GetExecutingAssembly();
+            string name = null;
+            foreach (var candidate in asm.GetManifestResourceNames())
+            {
+                if (candidate.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+                {
+                    name = candidate;
+                    break;
+                }
+            }
+            if (name == null)
+            {
+                Plugin.Log.LogWarning($"CombatText: {suffix} resource not found; icon disabled.");
+                return null;
+            }
+
+            byte[] bytes;
+            using (var stream = asm.GetManifestResourceStream(name))
+            {
+                bytes = new byte[stream.Length];
+                int read = 0;
+                while (read < bytes.Length)
+                {
+                    int n = stream.Read(bytes, read, bytes.Length - read);
+                    if (n <= 0)
+                    {
+                        break;
+                    }
+                    read += n;
+                }
+            }
+
+            var tex = new Texture2D(2, 2, TextureFormat.RGBA32, false);
+            if (!ImageConversion.LoadImage(tex, bytes))
+            {
+                Plugin.Log.LogWarning($"CombatText: {suffix} failed to decode; icon disabled.");
+                return null;
+            }
+            tex.wrapMode = TextureWrapMode.Clamp;
+            return tex;
+        }
+        catch (Exception e)
+        {
+            Plugin.Log.LogWarning($"CombatText: icon load failed ({suffix}): {e.Message}");
+            return null;
+        }
     }
 
     // The game's own HUD scale: the Canvas.scaleFactor of a canvas driven by UICanvasSetup, which
