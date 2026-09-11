@@ -12,6 +12,11 @@ All notable changes to this mod are documented here. The format follows [Keep a 
 - Fire, bleed, and stun icons in a row after the health bar while a zombie is affected, each filling down from the top as the effect's time runs out.
 - Settings for the status icon size, the armor-break icon size, and how long an effect must last before its icon shows.
 
+### Changed
+
+- The health bar sits a little higher above the zombie by default, to clear the head.
+- Damage numbers merge over a shorter window by default, so quick separate hits show their own numbers.
+
 ## [1.0.0] - 2026-09-10
 
 ### Added

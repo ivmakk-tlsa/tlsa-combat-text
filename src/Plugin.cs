@@ -46,7 +46,7 @@ public class Plugin : BasePlugin
             "Display", "ShowNumbers", true,
             "When true, each damage event spawns a floating number showing the health actually lost.");
         MergeTickWindow = Config.Bind(
-            "Display", "MergeTickWindow", 0.5f,
+            "Display", "MergeTickWindow", 0.1f,
             "Seconds within which repeated damage of the same type on the same zombie sums into one number instead of spawning another.");
         NumberLifetime = Config.Bind(
             "Display", "NumberLifetime", 1.5f,
@@ -55,7 +55,7 @@ public class Plugin : BasePlugin
             "Display", "Scale", 1.0f,
             "Size multiplier for the bars and numbers, on top of the game's own HUD scale (resolution plus the UI Scale setting).");
         BarOffset = Config.Bind(
-            "Display", "BarOffset", 0.6f,
+            "Display", "BarOffset", 0.8f,
             "World units above the zombie's chest position where the health bar is anchored.");
         StatusIconSize = Config.Bind(
             "Display", "StatusIconSize", 16.0f,
